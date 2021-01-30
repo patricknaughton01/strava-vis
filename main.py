@@ -5,6 +5,7 @@ import io
 import json
 import pickle
 import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
 
 from flask import Flask
 from flask import render_template, session, url_for, request, redirect
@@ -47,7 +48,7 @@ def index():
 @app.route('/total_dist.svg')
 def total_dist_svg():
     # https://gist.github.com/illume/1f19a2cf9f26425b1761b63d9506331f
-    fig = Figure()
+    fig = Figure(tight_layout=True)
     ax = fig.add_subplot(1, 1, 1)
     x = []
     y = []
@@ -61,9 +62,38 @@ def total_dist_svg():
             y.append(y[-1] + dist)
         else:
             y.append(dist)
-    ax.plot_date(x, y, fmt='-')
+    strava_orange = '#fc4c02'
+    ax.plot(x, y, color=strava_orange, marker='.')
+    ax.fill_between(x, y, color=strava_orange, alpha=0.5)
     ax.set_xlabel('Date')
+    date_formatter = mdates.DateFormatter('%Y-%m-%d')
+    lower_lim_x = x[0]
+    upper_lim_x = x[-1]
+    x_buffer = 0.05
+    width = upper_lim_x - lower_lim_x
+    lower_lim_x -= x_buffer * width
+    upper_lim_x += x_buffer * width
+    ax.set_xlim(lower_lim_x, upper_lim_x)
+    x_ticks = ax.get_xticks().tolist()
+    ax.xaxis.set_major_locator(mticker.FixedLocator(x_ticks))
+    ax.set_xticklabels(x_ticks, rotation=45)
+    ax.xaxis.set_major_formatter(date_formatter)
     ax.set_ylabel('Distance (Miles)')
+    y_buffer = 0.1
+    top_lim_y = (1 + y_buffer) * y[-1]
+    ax.set_ylim(0, top_lim_y)
+
+    gray = "#808080"
+    ax.plot([lower_lim_x, upper_lim_x], [y[-1], y[-1]], color=gray,
+        linestyle='--', alpha=0.5)
+    text_gap_x = 1
+    text_gap_y = 1
+    pt = (lower_lim_x, y[-1])
+    figure_pt = (pt[0] + text_gap_x, pt[1] + text_gap_y)
+    ax.annotate(f"{round(y[-1], 1)} Miles", pt, xytext=figure_pt)
+
+    ax.set_title('Total Distance')
+
     output = io.BytesIO()
     FigureCanvasSVG(fig).print_svg(output)
     return Response(output.getvalue(), mimetype="image/svg+xml")

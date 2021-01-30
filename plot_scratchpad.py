@@ -4,6 +4,7 @@ import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
 
 from main import meters_to_miles
+from matplotlib.figure import Figure
 
 
 def main():
@@ -44,17 +45,11 @@ def main():
     gray = "#808080"
     ax.plot([lower_lim_x, upper_lim_x], [y[-1], y[-1]], color=gray,
         linestyle='--', alpha=0.5)
-    text_gap = 1
+    text_gap_x = 1
+    text_gap_y = 1
     pt = (lower_lim_x, y[-1])
-    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-    ax_width, ax_height = bbox.width, bbox.height
-    ax_width_pts = ax_width * 72
-    ax_height_pts = ax_height * 72
-    ax_pos = ax.get_position()
-    left, bottom, right, top = ax_pos.x0, ax_pos.y0, ax_pos.x1, ax_pos.y1
-    figure_pt = (12, ax_height_pts)# * (top - bottom) * y[-1] / top_lim_y)
-    print(figure_pt)
-    ax.annotate(f"{round(y[-1], 1)} Miles", pt, xytext=figure_pt, xycoords="axes points")
+    figure_pt = (pt[0] + text_gap_x, pt[1] + text_gap_y)
+    ax.annotate(f"{round(y[-1], 1)} Miles", pt, xytext=figure_pt)
 
     ax.set_title('Total Distance')
     plt.show()
