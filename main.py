@@ -4,6 +4,8 @@ import numpy as np
 import io
 import json
 import pickle
+import math
+import datetime as dt
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
 
@@ -16,6 +18,7 @@ app = Flask("strava_vis")
 
 PORT = 5000
 CRED_FILE = 'cred.txt'
+API_PREFIX = 'https://www.strava.com/api/v3'
 app.secret_key = os.urandom(32)
 with open(CRED_FILE, "r") as cf:
     CLIENT_ID = cf.readline().strip()
@@ -31,16 +34,50 @@ def index():
                 + f'http://localhost:{PORT}/{url_for("oauth2_redirect")}&'
             + 'approval_prompt=force&scope=activity:read')
     else:
-        activities = requests.get('https://www.strava.com/api/v3'
-            + '/athlete/activities',
-            headers={'Authorization': f'Bearer {session["access_token"]}'})
+        auth_header = headers={'Authorization':
+            f'Bearer {session["access_token"]}'}
+        id = session['athlete']['id']
+        stats = json.loads(requests.get(API_PREFIX
+            + f"/athletes/{id}/stats", headers=auth_header).text)
+        run_count = stats['all_run_totals']['count']
+        max_reads = 100
         file_dir = f'user_data/{CLIENT_ID}/'
         file_name = 'activities.p'
         path = file_dir + file_name
         if not os.path.exists(file_dir):
             os.makedirs(file_dir)
-        with open(path, 'wb') as af:
-            pickle.dump(json.loads(activities.text), af)
+            all_activities = load_activities(run_count, max_reads, auth_header)
+            with open(path, 'wb') as af:
+                pickle.dump(all_activities, af)
+        else:
+            with open(path, 'rb') as af:
+                acts = pickle.load(af)
+            if len(acts) == 0:
+                all_activities = load_activities(run_count, max_reads,
+                    auth_header)
+                with open(path, 'wb') as af:
+                    pickle.dump(all_activities, af)
+            else:
+                new_activities = []
+                latest = acts[0]
+                latest_time = str(latest['start_date'])
+                latest_time = '2021-02-04T14:55:27Z'
+                latest_time = dt.datetime.strptime(latest_time,
+                    '%Y-%m-%dT%H:%M:%SZ').timestamp()
+                page = 1
+                while True:
+                    activities = requests.get(API_PREFIX
+                        + '/athlete/activities', headers=auth_header,
+                        params={'page': page, 'per_page': max_reads,
+                        'after': latest_time})
+                    activities = json.loads(activities.text)
+                    new_activities.extend(activities)
+                    page += 1
+                    if len(activities) == 0:
+                        break
+                new_activities.extend(acts)
+                with open(path, 'wb') as af:
+                    pickle.dump(new_activities, af)
         session["a_file"] = path
         return render_template('index.html')
 
@@ -115,6 +152,16 @@ def oauth2_redirect():
     session['expires_at'] = res_json['expires_at']
     session['athlete'] = res_json['athlete']
     return redirect(url_for("index"))
+
+
+def load_activities(run_count, max_reads, auth_header):
+    all_activities = []
+    for i in range(math.ceil(run_count / max_reads)):
+        activities = requests.get(API_PREFIX
+            + '/athlete/activities', headers=auth_header,
+            params={'page': i+1, 'per_page': max_reads})
+        all_activities.extend(json.loads(activities.text))
+    return all_activities
 
 
 def meters_to_miles(x):
